@@ -3,14 +3,19 @@
 \newcommand{\IWreport}{2015}
 
 \usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+
+\newtheorem{definition}{Definition}[section]
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{problem}{Problem}[section]
 
 \begin{document}
 
-\title{
-A Latex Template for Independent Work Reports\\
-Version 20151109v1}
+\title{Fast Polynomial Factorization}
 
-\author{Firstname Surname\\Adviser: Firstname Surname}
+\author{Clement Lee\\Adviser: Mark Braverman}
 
 \date{}
 \maketitle
@@ -18,122 +23,101 @@ Version 20151109v1}
 \thispagestyle{empty}
 \doublespacing
 \begin{abstract}
-This document is intended to serve as a sample you can use for independent work reports.  We provide some guidelines on content and formatting.  They are not required, but they might be helpful.
+  We survey the current state of the art in polynomial factorization, and most especially in the related topic of polynomial evaluation.
+  One particular theoretical result in factorization is tested experimentally for practical applicability.
 \end{abstract}
 
 \section{Introduction}
-
-This document is a sample you can use for formatting your independent work
-report.  An example template with all bib and supporting files can be downloaded
-from the IW website at {\em http://iw.cs.princeton.edu}.
-
-\section{Preparation Instructions}
-
-\subsection{Paper Formatting}
-
-There are no minimum or maximum length limits on IW reports.  
-We are including this template because we think it will be helpful
-for citing things properly and for including figures into formatted
-text.  If you are using \LaTeX~\cite{lamport94} 
-to typeset your paper, then we strongly suggest
-that you start from the template available at
-http://iw.cs.princeton.edu -- this
-document was prepared with that template.  
-If you are using a different software package to typeset your paper, 
-then you can still use this document as a reasonable sample of 
-how your report might look.  Table~\ref{table:formatting} is a suggestion
-of some formatting guidelines, as well as being an example of how to
-include a table in a Latex document.
-
-\begin{table}[h!]
-  \centering
-  \begin{tabular}{|l|l|}
-    \hline
-    \textbf{Field} & \textbf{Value}\\
-    \hline
-    \hline
-    Paper size & US Letter 8.5in $\times$ 11in\\
-    \hline
-    Top margin & 1in\\
-    \hline
-    Bottom margin & 1in\\
-    \hline
-    Left margin & 1in\\
-    \hline
-    Right margin & 1in\\
-    \hline
-    Body font & 12pt\\
-    \hline
-    Abstract font & 12pt, italicized\\
-    \hline
-    Section heading font & 14pt, bold\\
-    \hline
-    Subsection heading font & 12pt, bold\\
-    \hline
-  \end{tabular}
-  \caption{Formatting guidelines. }
-  \label{table:formatting}
-\end{table}
-
-\textbf{Please ensure that you include page numbers with your
-submission}. This makes it easier for readers to refer to
-different parts of your paper when they provide comments.
-
-We highly recommend you use bibtex for managing your references and citations.  You can add bib entries to a references.bib file throughout the semester (e.g. as you read papers) and then they will be ready for you to cite when you start writing the report.  If you use bibtex, please note that the references.bib file provided in the template example includes some format-specific incantations at the top of the file.  If you substitute your own bib file, you will probably want to include these 
-incantations at the top of it.
-
-\subsection{Citations}
-
-There are various reasons to cite prior work and include it as references in your bibliography.  For example, If you are improving upon 
-prior work, you should include
-a full citation for the work in the bibliography \cite{nicepaper,nicepaper2}. 
-You can also cite information that is used as background or explanation.  In addition to citing scholarly papers or books, you can also create bibtex entries for webpages or other sources.  Many online databases allow you to download a premade bibtex entry for each paper you access.  You can simply copy-paste these into your references.bib file.
-
-\noindent\textbf{Figures and Tables.} Ensure that the figures and
-tables are legible.  Please also ensure that you refer to your
-figures in the main text. Make sure that your figures will be legible
-in the expected forms that the report will be read.  If you expect someone
-to print it out in gray-scale, then make sure the figures are legible 
-when printed that way.  
-
-\noindent\textbf{Main Body.} Avoid bad page or column breaks in
-your main text, i.e., last line of a paragraph at the top of a
-column or first line of a paragraph at the end of a column. If you
-begin a new section or sub-section near the end of a column,
-ensure that you have at least 2 lines of body text on the same
-column. 
-
-\subsection{Ethics}
-
-Your independent work report should abide by the basic standards of scholarly ethics and by the Princeton Honor Code. If you have any doubts about how to cite
-other work, how to quote or include text or images from other works, or other issues, please discuss them with your project adviser or with the IW coordinators. 
-
-\section{Outline}  
-The following is a possible outline for your paper.
-\subsection{Introduction}
 \begin{itemize}
 \item Problem statement 
 \item Motivation and goal...The goal of this project is...
 \item Roadmap: The remainder of this paper is organized as follows....
 \end{itemize}
+%description of factorization, we particularly focus on evaluation
+%why is this important
+Polynomial factorization is one of the key problems in computer algebra, being important for a variey of other problems as well as being a common use case in itself.
+Development in this field is largely driven by theoretical improvements, and few of these results carry onto actual software implementations.
+The 
 
-\subsection{Related Work}
+% goal of paper is to be a survey of the techniques following this algorithm
+We aim to survey the current methods and the implementations widely available at this time, particularly focusing on the breakdown of a 2011 paper, \emph{Fast polynomial factorization and modular composition} by Kiran Kedlaya and Christopher Umans.
+Through the understanding and lens of this paper, we reconstruct the design choices 
+
+
+%roadmap for the rest of the paper
+We start with the necessary backround information for the 
+
+\section{Background}
+%overview of algebra
+For the 
+
+%crt, product of primes
+A key result that allows smaller fields to be used in constructing larger results is the Chinese Remainder Theorem.
+\begin{theorem}[Chinese Remainder Theorem]
+  For any two congruences $x\equiv y_1\pmod n_1$ and $x\equiv y_2\pmod n_2$ where $n_1$ and $n_2$ are relatively coprime, there exists a solution $x$.
+  Furthermore, this solution is unique modulo $n_1\cdot n_2$.
+\end{theorem}
+The Chinese Remainder Theorem can easily be extended from this formulation to accommodate not just a pair of congruences but any system of congruences, as long as all of the $n_i$ are relatively coprime.
+It also sees a great deal of modern day applications, such as distributed secret sharing or performing arithmetic large operations on extremely large numbers.
+These are briefly described below.
+
+\begin{problem}[Secret sharing using the CRT]
+  Given $n$ people and a secret $S$, divide the secret among them such that together, they can recreate the secret, but prevent this from being possible with any group of size $n-1$ or less.
+\end{problem}
+Using the Chinese Remainder Theorem, given a secret $S$, we need $n$ relatively coprime integers $x_i$ such that the product of any size $n-1$ subset of the $\{x_i\}$ (call this $p_{n-1}$)is less than $S$, but for the product of the whole set to be greater than $S$.
+This means that $S$ will be unique modulo $\prod_{i=1}^n x_i$, but at the same time not unique modulo $p_{n-1}$, and therefore the secret can only be reconstructed using all $n$ congruences.
+Thus, the secret $S$ need just be to distributed in its reduced form of $S\mod x_i$ for each person $i$.
+
+\begin{problem}[Large number arithmetic]
+  For two large numbers $s$ and $t$, consider any operation of the two that would result in an overflow of the natural bit size (for most systems, either 32 or 64 bits).
+\end{problem}
+A main concern here is that large number arithmetic tends to be comparatively inefficient.
+In particular, for the multiplication of two large $N$-bit integers, algorithms take on the order of $O(n^2)$, and this is exacerbated by general overhead.
+Instead, to perform the calculation, we can find a set of $n$ relatively coprime integers $x_i$ such that $\prod x_i$ is greater than the product $st$, and perform the calculation mod $x_i$ for each integer.
+That is, we can then take the modulus $s\mod x_i$ and $t\mod x_i$ and return $st\pmod x_i$.
+Importantly, because we can choose these $x_i$ to fit within a smaller natural bit size, the computations will be very fast on normal computers.
+Then, using the Chinese Remainder Theorem, we can perform the reconstruction as a final step in time linear to the number to $n$ by the system of congruences $st\pmod x_i$.
+Because $\prod_{i=1}^n x_i$ will grow quickly, this allows us to perform calculations on extremely large integers efficiently using a small set of $\{x_i\}$.
+This reduction step of converting $st$ to $x_i$ can be performed multiple times, and furthermore, these calculations are entirely separated.
+This allows for a distributed or parallel approach to calculating these larger operations, as each subsystem can be solely responsible for the calculation of $st\pmod x_i$.
+This is similar in concept to the multimodular reduction which is later key in evaluating polynomials using a reduced set of primes.
+
+Another note of importance on the previous two results was that we had to ensure that $S$ was less than the product of the $x_i$ (in the case of the secret sharing), or that $st$ was less than the product of the $x_i$ (in the case of large arithmetic operations).
+This is central to the uniqueness, but in general, it is not necessarily immediately clear how many relatively coprime integers must be used to achieve this uniqueness.
+In most practical cases, we let the $x_i$ be the prime integers $2, 3, 5, \cdots$ as they are trivially coprime.
+Using the following theorem, we can then determine an upper bound for the number of $x_i$ required.
+\begin{theorem}[Product of primes]
+  For any $N$, take the set of all primes $p_i$ such that for any $i$, $p_i \leq 16\log N$.
+  Then the product of these primes $\prod p_i$ will be greater than or equal to $N$.
+\end{theorem}
+This gives us a bound on the highest prime $p$ necessary ($16\log N$, which is easier to determine using logarithmic arithmetic), and also gives us a general sense of the number of primes needed.
+Using the prime-counting function $\pi$, we can express this as $\pi(16\log N)$.
+We can then utilize the Prime Number Theorem to approximate this using less intuitively opaque functions.
+\begin{theorem}[Prime Number Theorem]
+  As $x$ goes to infinity, the prime counting function $\pi(x)$ approaches the function $x/\log x$; that is,
+  \[\lim_{x\to\infty} \frac{\pi(x)}{x/\log x} = 1\]
+\end{theorem}
+
+%definitions
+
+\section{Related Work}
 \begin{itemize}
 \item Survey of prior work with similar goals 
 \item Comparison to your project 
 \end{itemize}
+%current theory
 
-\subsection{Approach}
-\begin{itemize}
-\item Key novel idea 
-\end{itemize}
+%current implementations
 
-\subsection{Implementation}
+\section{Approach}
+%differences from thm current stuff to what i'm doing
+
+\section{Implementation}
 \begin{itemize}
 \item Things you implemented.  How you did it? 
 \end{itemize}
 
-\subsection{Evaluation}
+\section{Evaluation}
 \begin{itemize}
 \item Experiment design...
 \item Data...
@@ -144,7 +128,7 @@ The following is a possible outline for your paper.
 \item Further results needed...
 \end{itemize}
 
-\subsection{Summary}
+\section{Summary}
 \begin{itemize}
 \item Conclusions...
 \item Limitations...
@@ -155,6 +139,5 @@ The following is a possible outline for your paper.
 \bstctlcite{bstctl:etal, bstctl:nodash, bstctl:simpurl}
 \bibliographystyle{IEEEtranS}
 \bibliography{references}
-
 \end{document}
 

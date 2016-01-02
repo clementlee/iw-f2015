@@ -21,6 +21,8 @@
 *.ind
 *.lof
 *.lot
+*.fls
+*.fdb_latexmk
 *.maf
 *.mtc
 *.mtc1
