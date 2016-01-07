@@ -15,7 +15,7 @@ r = 2
 #x = GF(r)['x'].gen()
 x = Integers(r)['x'].gen()
 f = 0
-degree = 100000
+degree = 10000
 for i in xrange(degree):
     f += random.randint(0, r) * x**i
 
@@ -56,6 +56,7 @@ print r
 p = [2]
 cummul = 2
 lim = d*(r-1)**d
+print lim
 for i in xrange(3, l+1, 2):
     #print p
     #if cummul % r == 0:
@@ -137,4 +138,5 @@ print end-start
 #        print "Error on %d, should be %d but got %d" % (points[i], ev1, ev2)
 #
 
+print p
 print sum(p)

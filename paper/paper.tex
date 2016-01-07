@@ -23,36 +23,45 @@
 \thispagestyle{empty}
 \doublespacing
 \begin{abstract}
-  We survey the current state of the art in polynomial factorization, and most especially in the related topic of polynomial evaluation.
-  One particular theoretical result in factorization is tested experimentally for practical applicability.
+  We survey the current theoretical advances in polynomial factorization, and most especially in the related topic of polynomial evaluation.
+  One particular theoretical result in factorization\cite{kedlaya2011fast} is tested experimentally for practical applicability.
+  This result is deconstructed into a codepath that implements the polynomial evaluation algorithm, which is compared to existing algorithms and implementations.
+  Real-world performance optimizations are produced and discussed in reference to improving on theoretical big-Oh performance.
 \end{abstract}
 
 \section{Introduction}
-\begin{itemize}
-\item Problem statement 
-\item Motivation and goal...The goal of this project is...
-\item Roadmap: The remainder of this paper is organized as follows....
-\end{itemize}
 %description of factorization, we particularly focus on evaluation
 %why is this important
-Polynomial factorization is one of the key problems in computer algebra, being important for a variey of other problems as well as being a common use case in itself.
+Polynomial factorization is one of the key problems in computer algebra, being important for a variety of other problems as well as being a common use case in itself.
 Development in this field is largely driven by theoretical improvements, and few of these results carry onto actual software implementations.
-The 
-
-% goal of paper is to be a survey of the techniques following this algorithm
+Potential performance gains, if recreatable in real-world situations, would be a large benefit to such systems, which currently perform basic but expensive calculations.
+The goal of these investigations is to see whether we can create a small data structure that contains enough data to allow extremely fast function calls.
 We aim to survey the current methods and the implementations widely available at this time, particularly focusing on the breakdown of a 2011 paper, \emph{Fast polynomial factorization and modular composition} by Kiran Kedlaya and Christopher Umans.
-Through the understanding and lens of this paper, we reconstruct the design choices 
-
+Through the understanding and lens of this paper, we reconstruct the design choices and evaluate a few of the alternatives.
+This gives us a view on the current algorithms that are largely considered as the bedrock for such algorithms, which we want to look at in deeper detail for their characteristics and conceptual foundations.
 
 %roadmap for the rest of the paper
-We start with the necessary backround information for the 
+We start with the necessary background information for the rest of the paper, building from the basic principles of number theory and abstract algebra.
+This starts with a review of the necessary results, and builds a few relevant key theorems that will be used throughout.
+We then discuss the basic foundation within the paper itself, while similarly outlining current software and their present limitations.
+This leads into a discussion on the approach made when constructing the algorithm to implement, and the results of the implementation itself.
+The results of the implementation in various stages are discussed, and evaluated against standard benchmarks.
+Finally, we discuss how future work in this project can be laid out.
 
 \section{Background}
 %overview of algebra
-For the 
+For the entirety of this paper, we will be working with integers and modular arithmetic, as they form the basis for results in other kinds of domains.
+The relations of the modular integers $\mathbb{Z}/r\mathbb{Z}$ with the space of integers $\mathbb{Z}$, and consequently with the rational numbers $\mathbb{Q}$, are clear, and thus we will continue to rely on these basic algebraic constructions.
+In particular, we will be heavily relying on the integers modulo $r$, which we denote by $\mathbb{Z}/r\mathbb{Z}$, and the closely related fields of prime $p$, denoted by $\mathbb{P}$.
+Furthermore, recall that we can define polynomial rings over any arbitrary commutative ring $R$, which we will denote by $R[X]$, $X$ being the variable of these polynomials.
+We will extend this notation for multivariate polynomial rings, obeying the same principles as in the univariate case, by $R[X_1, X_2, \cdots, X_n]$ for $n$-variate polynomials.
+
+\subsection{Important notes}
+For the rest of the paper, some overview and recollection of a few number theory results is important for understanding the driving principles behind the work.
+We list some of the primary theorems and problems that occupy this space, and some foundation on how they relate to the rest of the paper.
 
 %crt, product of primes
-A key result that allows smaller fields to be used in constructing larger results is the Chinese Remainder Theorem.
+The first of these is the key result that allows smaller fields to be used in constructing larger products; that is, the Chinese Remainder Theorem.
 \begin{theorem}[Chinese Remainder Theorem]
   For any two congruences $x\equiv y_1\pmod n_1$ and $x\equiv y_2\pmod n_2$ where $n_1$ and $n_2$ are relatively coprime, there exists a solution $x$.
   Furthermore, this solution is unique modulo $n_1\cdot n_2$.
@@ -72,7 +81,7 @@ Thus, the secret $S$ need just be to distributed in its reduced form of $S\mod x
   For two large numbers $s$ and $t$, consider any operation of the two that would result in an overflow of the natural bit size (for most systems, either 32 or 64 bits).
 \end{problem}
 A main concern here is that large number arithmetic tends to be comparatively inefficient.
-In particular, for the multiplication of two large $N$-bit integers, algorithms take on the order of $O(n^2)$, and this is exacerbated by general overhead.
+In particular, for the multiplication of two large $N$-bit integers, algorithms take on the order of $O(n^2)$, and this is exacerbated by general overhead of integers which do not fit neatly into the word length of a system.
 Instead, to perform the calculation, we can find a set of $n$ relatively coprime integers $x_i$ such that $\prod x_i$ is greater than the product $st$, and perform the calculation mod $x_i$ for each integer.
 That is, we can then take the modulus $s\mod x_i$ and $t\mod x_i$ and return $st\pmod x_i$.
 Importantly, because we can choose these $x_i$ to fit within a smaller natural bit size, the computations will be very fast on normal computers.
@@ -82,7 +91,7 @@ This reduction step of converting $st$ to $x_i$ can be performed multiple times,
 This allows for a distributed or parallel approach to calculating these larger operations, as each subsystem can be solely responsible for the calculation of $st\pmod x_i$.
 This is similar in concept to the multimodular reduction which is later key in evaluating polynomials using a reduced set of primes.
 
-Another note of importance on the previous two results was that we had to ensure that $S$ was less than the product of the $x_i$ (in the case of the secret sharing), or that $st$ was less than the product of the $x_i$ (in the case of large arithmetic operations).
+Another note of importance on the previous two results was that $S$ was necessarily ensured to be less than the product of the $x_i$ (in the case of the secret sharing), or that $st$ was less than the product of the $x_i$ (in the case of large arithmetic operations).
 This is central to the uniqueness, but in general, it is not necessarily immediately clear how many relatively coprime integers must be used to achieve this uniqueness.
 In most practical cases, we let the $x_i$ be the prime integers $2, 3, 5, \cdots$ as they are trivially coprime.
 Using the following theorem, we can then determine an upper bound for the number of $x_i$ required.
@@ -97,47 +106,342 @@ We can then utilize the Prime Number Theorem to approximate this using less intu
   As $x$ goes to infinity, the prime counting function $\pi(x)$ approaches the function $x/\log x$; that is,
   \[\lim_{x\to\infty} \frac{\pi(x)}{x/\log x} = 1\]
 \end{theorem}
+Thus, performing operations on two large $N$-bit integers, as above, will take on the order of $O\left(\frac{N^2}{\log N^2}\right)$ word-length operations rather than $O(N^2)$.
 
-%definitions
+\subsection{Subproblems}
+Before we discuss them in detail and how they relate, it is important to clearly define what exactly each of the subproblems to this topic are.
+The following are the two most common problems we will continually refer to.
+
+\begin{definition}[Modular composition]
+  Given a multivariate polynomial $f(x_1, x_2, \cdots, x_n)$ in the polynomial ring $R[x_1, x_2\cdots x_n]$, where $f$ has degree at most $d-1$, and univariate polynomials $g_1(x), g_2(x), \cdots g_n(x), h(x)$, we want to output the result of 
+  \[f\circ g \equiv f(g_1(x), g_2(x), \cdots, g_n(x)) \mod h(x)\]
+\end{definition}
+This extends the basic definition above into the multivariate case, noting of course that only $f$ is multivariate, and the rest of the operation is done over the single variable $x$.
+
+\begin{definition}[Multipoint multivariate polynomial evaluation]
+  Given a multivariate polynomial $f(x_1, x_2, \cdots x_m$ in the polynomial ring $R[x_1, x_2,\cdots x_m]$, wherere $f$ has degree at most $d-1$ in each variable, and a list of evaluation points $\alpha_1, \alpha_2,\cdots,\alpha_n$ where $\alpha_i \in R^m$, output $f(\alpha_1),f(\alpha_2),\cdots,f(\alpha_n)$.
+\end{definition}
+This the the most general case of polynomial evalution, letting us perform univariate or unipoint evaluation simply by setting either $m =1$ or $n=1$, respectively.
+Thus, solutions to this problem are of great interest, as they are universally applicable to different inputs.
 
 \section{Related Work}
-\begin{itemize}
-\item Survey of prior work with similar goals 
-\item Comparison to your project 
-\end{itemize}
-%current theory
+We first outline the theory that leads up to the central code of our implementation, and discuss the software choices that were evaluated in the process.
+The theory covers the general reduction of the polynomial factorization problem to the subproblem of polynomial evaluation that is the basis of the implementation.
+This leaves the actual core algorithm to be discussed later on, but this is a sketch of the current approach to the problem.
+
+\subsection{Theoretical construction}
+Polynomial factorization is largely developed over polynomial rings defined on fields; that is, of the form $\mathbb{F}_q[x]$.
+For other domains, such as $\mathbb{Z}$ or $\mathbb{Q}$, the field-based algorithms can later extend to cover these cases.
+Similarly, multivariate factorization (over $\mathbb{F}_q[x_1, x_2,\cdots,x_n]$) are also dependent on univariate factorization, which is thus the primary foundation to all related algorithms.
+In most current algorithms for univariate polynomial factorization, the key bottleneck turns out to be the calculation of what are known as \emph{Frobenius power} polynomials.
+That is, for a univariate polynomial $h(X)$ of degree $n$, we wish to calculate the polynomials of the form ${X^q}^i \mod h(X)$, where $i$ ranges between $1$ and $n$.
+In particular, the most intensive case of $i=n$ is of importance.
+
+The basic naive algorithm to do this kind of exponentiation efficiently (rather than just multiplying $X$ by itself until ${X^q}^i$ is achieved) is known as \emph{repeated squaring}.
+That is, using $X$, we can calculate $X^2 = X\cdot X$, and using $X^2$, we can calculate $X^4 = X^2\cdot X^2$.
+This means that as the exponent is doubled every time, it only takes a logarithmic amount of time to calculate an exponent.
+Of course, all of these operations are done congruent to $h(X)$, so no further reduction step is required.
+Thus, this method takes time equivalent to $\log q^n$ to calculate ${X^q}^n \mod h(X)$, so this is equivalent to $n\log q$ time.
+This is relatively slow, and improvements on these calculations are of high importance to the problem space.
+
+One improvement on the squaring algorithm is based on composition.
+Using the repeated squaring method, we can calculate $X^q \mod h(X)$ in time proportional to $\log q$ time.
+Then, we can actually compose $X^q$ with itself to get that
+\[(X^q)^q = {X^q}^2 \mod h(X)\]
+In a concept largely similar to the repeated squaring algorithm, we can also perform a repeated composition, as 
+\[\left({X^q}^2\right)^2 = {X^q}^4 \mod h(X)\]
+Therefore, in the same doubling manner, this means that it takes $\log n$ operations to get from $X^q$ to ${X^q}^n$.
+Note that these operations are modular compositions as previously defined, as we are composing the polynomial with itself as well as performing the operation modulo $h(X)$.
+Adding up the time necessary for both operations, this means that this composition algorithm runs in time proportional to $\log q$ modular multiplications, and then $\log n$ modular compositions.
+This means that the efficiency of modular compositions is thus crucial for this speedup; if they approach the speed of modular multiplications, this new algorithm takes time proportional to $\log q + \log n$, which is significantly better.
+Modular composition thus forms the basis of many factoring algorithms, and significant improvements to these calculations can be plugged into existing factoring algorithms to achieve significantly better big-Oh performance.
+
+Of important note for modular composition is that it is not merely comprised of two separate problems of composition, then reducing modulo the polynomial given.
+Recall that the general univariate case for modular composition is that given three polynomials of $f(x)$, $g(x)$, and $h(x)$, we wish to calculate
+\[f(g(x)) \mod h(x)\]
+If both $f(x)$ and $g(x)$ are of degree $n$, this implies that $f(g(x))$ will be of degree $n^2$.
+Thus, the composition having produced a polynomial of degree $n^2$, the overall algorithm must take this much time.
+Having a quadratic algorithm for this is not of much good, and indeed the goal is for modular compositions to take near linear time.
+It is therefore impossible to separate the composition and modulo operations into two components, as the reduction must be tightly integrated into the composition to ensure that no quadratic elements are needed to process $f(g(x))$.
+Most of the gains possible in this field are indeed due to operating on the overall structure of the modular composition.
+
+Two main approaches to modular composition exist at the moment, relying on reductions to either matrix multiplication or multipoint multivariate polynomial evaluation.
+The first is not considered in these contexts, as fast matrix multiplication is still impractical and thus a weaker assumption to make as of current standards.
+As such, the efficient reduction to multipoint multivariate evaluation is key.
+In the univariate case, there exist algorithms to process a batch of $n$ queries for multipoint evaluation in time proportional to $n\log^2 n$, thus taking amortized $\log^2 n$ time per query.
+To do this, we can break down the problem into a recursive algorithm, and thus rely on a tree-like structure to grant logarithmic performance.
+
+However, this algorithm does not generalize well into the multivariate case, so it remains a fundamentally limited class of techniques for the general case.
+Thus, we seek efficient algorithms to perform multivariate evaluation, with of course the added benefit that such methods can always be used in the univariate case as well.
+To accomplish this, we examine a few related algorithms that later form the foundation of the query structure.
+
+To begin, we consider the case of multipoint evaluation of multivariate polynomials defined over prime fields; that is, of the form $\mathbb{F}_p$ where $p$ is prime.
+In this case, we can take a polynomial $f(x_1, x_2, \cdots, x_n)$ and evaluate it efficiently over the entire field.
+The key understanding here is that by using the finite field fast Fourier transform, it is possible to evalute a univariate polynomial over a finite field at all of its points at a extremely efficient cost.
+Thus, we can iteratively cover the multivariate polynomial evaluation case by reducing the polynomial to each univariate case, evaluating it, and then storing these combinations.
+In this case, because the FFT is so efficient, and queries are more likely to be dense, this multipoint evaluation algorithm is simply a way of efficiently precomputing a complete lookup table.
+To accomplish this, the algorithm performs the following steps.
+Firstly, for each $x_i$, it computes the reduction $\bar{f}$ of the polynomial $f$ by taking $f\pmod{x_i^p - x_i}$.
+This reduces the polynomial into a smaller state, but maintains the multivariate status.
+However, this polynomial will be solvable using the FFT and will evaluate equivalently to the original.
+Then, for the second step, it takes the reduction $\bar{f}$ and performs the FFT on each variable, holding the others constant.
+That is, it writes the polynomial in terms of one variable, and evaluates that polynomial at all $p$ possible points.
+Using this evaluation, it then calculates all other possibilties for another variable.
+Iteratively, this generates a table that is $p^n$ in size, where $n$ is the number of variables.
+Thus, actually performing the evaluation stage is just the cost of finding each of the values in the table, which is very fast.
+The end result is equivalent to a basic lookup table, with the bonus that generating this is relatively efficient.
+However, the evaluations are still based on the size of the field ($p$), which is considerable overhead for larger fields.
+Furthermore, it also doesn't apply to rings, most particularly of the form $\mathbb{Z}/r\mathbb{Z}$, where $r \in \mathbb{N}$.
+
+These limitations are important, but largely solved by the introduction of the multimodular algorithm.
+This incremental improvement on the prime field algorithm works instead on $\mathbb{Z}/\mathbb{Z}$.
+Relying on the standard definition of multipoint multivariate evaluation, we have a $m$-variate polynomial $f(x_1, x_2, \cdots, x_m)$ defined over the polynomial ring $\mathbb{Z}/r\mathbb{Z}[x_1, x_2, \cdots, x_m]$ that is of degree at most $d-1$ in each variable.
+We want to evaluate this at a set of points $\alpha_1, \alpha_2, \cdots, \alpha_n$.
+The algorithm is then enumerated below, taking a parameter $t$ that is chosen later for efficiency.
+\begin{enumerate} 
+  \item 
+    The first step is to reduce all coefficients in $f$ and $\alpha_i$ to the natural representation of the elements in $\mathbb{Z}/r\mathbb{Z}$ in the set $\{0, 1, 2, \cdots, r-1\}$.
+    This allows the problem to be constructed in a simple modular arithmetic sense, rather than relying on ring behavior.
+  \item
+    Next, we calculate all primes $p_1, p_2, \cdots, p_k$ less than $16\log(d^m (r-1)^{dm})$.
+  \item
+    Now for each prime, we calculate the reduction of $f$ modulo the primes, so let $f_i$ be equivalent to $f \mod p_i$.
+    We apply a similar process to $\alpha_i$, creating $\alpha_{ij} = \alpha_i\mod p_j$.
+  \item 
+    If $t=1$, we use the prime field algorithm above to calculate the values of $f_j(\alpha_{ij}) \mod p_j$.
+    Otherwise, we recurse on this same algorithm, but pass in the reduced polynomial $f_j$ along with its corresponding reduced evaluation points $\alpha_{ij}$ as well as $t-1$ for the recursion variable.
+  \item
+    Once we've calculated all of the evaluations $f_j(\alpha_{ij})$, we can then use the Chinese Remainder Theorem to get the unique integer $i_j$ where $0 \leq i_j < \prod_{i=1}^k p_i$ such that we return $i_j\mod r$ for each $j$ corresponding to each $\alpha_j$.
+\end{enumerate}
+
+This is the basic algorithm, but it includes a few details that are important to note.
+Firstly, the second step calculates all of the primes less than $16\log(d^m (r-1)^{dm})$ as this is the application of the prime multiplication theorem described earlier.
+This ensures that the product of these primes $p_i$ is greater than $d^m (r-1)^{dm}$, which is the range of values attainable with a multivariate polynomial.
+This ensures that the reconstruction using the Chinese Remainder Theorem in step 5 will be successful.
+Furthermore, this also helps provide a basic bound for this algorithm in terms of evaluation, as it will take time linear in the number of primes used.
+
+We can also note that the prime field algorithm, while space inefficient for large primes (because of reliance on the size $p$ in exponential terms), is fast to calculate and is thus a reasonable choice for smaller primes.
+By the way the multimodular algorithm works, it continually reduces the actual evaluation down to smaller primes.
+This is thus dependent on the number of reductions applied, which is the parameter $t$; the authors choose it to be a small constant value, but it can certainly be adjusted as necessary for real-world efficiency purposes.
+
+This algorithm forms the basis of a polynomial evaluation query structure, where we can preprocess the polynomial to get an efficient data structure for repeated unipoint evaluations.
+This gives us a separate result that is interesting in its own light: by creating a relatively compact addon structure for the polynomial, evaluations can be made much more performant.
+The details for this follow in the implementation section.
 
 %current implementations
+\subsection{Software choices}
+As of this current writing, a wide variety of computer algebra systems exist, replete with a similar range of languages used to interface with them.
+Of primary interest to this project is SageMath, which builds on top of Python and exposes a huge variety of abstract algebraic constructions through a simple interface.
+It is an open source project that uses familiar computer algebra constructs when parsing (such as the use of ``\^{}'' for exponentiation rather than the Python programmatic ``**''), and thus extends the syntax space to allow common Python code to run normally as well as utilize a variety of basic algebraic operators.
+With native support for polynomial rings over a huge range of possible domains, it has a base implementation of the necessary functions that are utilized throughout this paper, which serve as a reference in terms of performance and behavior for our implementation.
+
+It is however impossible to describe SageMath without also mentioning FLINT (Fast Library for Number Theory), a highly-optimized library written in C which serves as the low-level implementation for many of SageMath's functions.
+It has efficient implementations of many number theoretic functions, including specific algorithmic operations for problems.
+However, it suffers from a rather obtuse interface, and the majority of its functions are effectively wrapped by SageMath through a fast C interface.
+This is not complete due to SageMath's different intended target audience (focusing on a breadth of features rather than deep optimizations), but there were extremely few features that FLINT provided for the purposes of this project that were not covered.
+These were not sufficiently useful for the added cost of working with a lower level language with poorer documentation.
+As such, while it was explored in some depth, it was not deemed a reasonable ground for an extension of functionalities.
+
+Both of these libraries were primarily investigated due to their FOSS (free and open source) status, meaning that they were easy to develop on and online resources were generally available.
+The open source nature of SageMath in particular was useful, as some newer functions lacked the extensive documentation of the core library and thus exploring the actual source code was useful in determining interfaces and algorithmic choices.
+Furthermore, by sticking to popular languages like Python, the learning overhead was minimized.
+SageMath was also designed for extensibility, as the architecture of the computer algebra system allows for a great deal of flexibility in coding additional structures that plug in neatly to existing functions.
+
+The limitations of these two libraries lie in the philosophies that guide the two projects.
+For SageMath, the focus is on generalization and providing a wide range of different features that are useful in all cases.
+This means that there is great flexibility, but this comes at the cost of a lack of specific codepaths designed for certain kinds of inputs.
+For example, it lacks any multipoint polynomial evaluation utilities, not even wrapping FLINT's included behavior.
+This doesn't come at any cost to correctness, as multipoint polynomial evaluation can always trivially be implemented using a loop over unipoint evaluation, but it does mean that performance suffers naturally.
+In general, SageMath focuses more on the presence of functions that allow more things to be done, with less regard to actual performance.
+The libraries that it interfaces with are relied on for performance, and sometimes non-critical methods like multipoint evaluation are simply not included in the package.
+
+On the other hand, FLINT is heavily focused on speed and efficiency, which makes its code relatively difficult to work with in terms of providing extra functionality.
+The provided structures are mostly custom designed for the algorithms, meaning that the parameters and memory structure are packed with the minimal set of information necessary.
+Additionally, FLINT is meant to be a low-level library for other applications to interface with, rather than being designed for end users like SageMath.
+This is reflected in largely technical documentation that doesn't cover many of the algorithmic choices or how to extend its behavior when adding new code or features.
+This made extending it for this new functionality difficult without introducing significant new structures, making it less and less useful.
+Furthermore, the majority of the planned work focused on largely original code, meaning that rapid prototyping and comparisons to existing code were more important.
+Neither of these goals were well supported by FLINT, so while it could be an interesting future direction on more finalized code, it was of less importance to this project, mainly serving as a reference for existing optimizations.
+Finally, FLINT is also largely designed for smaller numbers, and explicitly does not handle integer overflows; the SageMath wrapping is also designed to account for this by reverting to a different implementation for larger parameter sizes.
+This is a potential limitation for this project, as it is likely that the promised gains in speed will only be realized for extremely large cases.
 
 \section{Approach}
 %differences from thm current stuff to what i'm doing
+The main philosophy behind this project was to produce both something implementable but also testable in common real world usage.
+Thus, the algorithm described for a query structure producing univariate evaluation was essentially the key core of the paper, and thus the target of the most work.
+As the paper discussed did not in itself cover the topic of polynomial factorization in depth, it was left as a extension of the main topic in terms of the implementation.
+The paper was segmented into potential components on each of the algorithms and functions described, with the larger sections being the reduction on modular composition to multipoint multivariate polynomial evaluation, and the evaluation itself.
+However, as the modular composition was perhaps a less interesting algorithm to discuss in terms of output and was put as a secondary concern.
+
+Of primary importance was the polynomial evaluation query structure, as it was both the basis of the gains described by the paper as well as being an immediately applicable structure that was easily testable against reference implementations.
+Especially as the base evaluation algorithm works on univariate polynomials, this was the key part of the algorithm to implement and examine.
+The promise of this structure was that it would be able to reduce large polynomials into a compact structure which could allow for very fast evaluations, and would ideally scale well into larger polynomials.
+
+Crucially, very few algorithms in these fields actually see any implementations, as the constant costs tend to be high despite potentially better big-Oh performance.
+A primary aim of this paper is to see whether real-world performance gains can be realized.
+To do this, efficient choices for normally excluded details were filled in, and the actual code was designed around attempting to make the real world performance be comparable with existing normal methods.
+The basic polynomial evaluation method takes time proportional to the degree of the polynomial, as for $f(x) = a_0 + a_1x^1 + a_2x^2 + \cdots + a_dx^d$, we can convert this to the form of 
+\[f(x) = \left(\left(a_dx+a_{d-1}\right)x + a_{d-2}\right)x + \cdots\]
+To evaluate this within a polynomial ring modulo a certain integer will then take $d$ modular multiplications and additions.
+This is relatively efficient for smaller polynomials, but the expectation is to be able to compress the polynomial structure in some way for larger polynomials.
+The trivial extension algorithm to this is to simply evaluate the polynomial for every single point (which is enumerable as we are working over the modular integers), and store this information, but this is obviously both extremely slow to precompute and also very space inefficient.
 
 \section{Implementation}
-\begin{itemize}
-\item Things you implemented.  How you did it? 
-\end{itemize}
+This brings us to the actual basis of the code that was written, which revolves around the discussed polynomial evaluation query structure discussed.
+For this problem, we focus on the univariate case, but this algorithm generalizes easily to the multipoint evaluation case simply by changing the transforms used.
+We start by revisiting the multimodular reduction algorithm, which was initially designed for multipoint evaluation.
+However, note that the polynomial processing and reductions are largely done in parallel to the actual evaluations themselves.
+Therefore, by decoupling the two processes and storing the results of the evaluated polynomial reductions, and separately applying the reconstruction via the Chinese Remainder Theorem to do evaluations, we can actually interpret this algorithm as an efficient query structure.
+This is the key note that allows for much faster polynomial evaluation.
+We take the general sketch provided in the paper but simplify and streamline it for the purposes of producing usable code.
+The algorithm thus takes the following steps to preprocess.
+\begin{enumerate}
+  \item
+    It first transforms an input $g$ into $f$ by using a function map $\phi$.
+    This function $\phi$ was simply the identity mapping for the testing performed below, but changing this allows for better performance qualities as described later.
+  \item
+    The algorihtm then takes the function $f$, and reduces the coefficients by the modulo.
+  \item 
+    All primes less than $16\log(d^m(r-1)^{dm})$ are generated using a simple iterative method.
+    Note that for our purposes, as $f$ is univariate in this specific implementation, $m=1$.
+  \item
+    $f$ is reduced by each of the primes, and these are precomputed for the full range of each of the primes.
+    All of this data is stored in a hashtable for fast lookup.
+\end{enumerate}
+With this precomputed, this means that the data structure will take space proportional to the sum of the primes used, as for each $p_i$, we calculate $p_i$ separate values.
+As we are looking just for the primes less than $16\log(d^m(r-1)^{dm})$, their sum will be far less.
+Since the key desired behavior is for the product of the primes simply to be greater than $d^m(r-1)^{dm}$, this was also used as a condition for the primes that needed to be generated.
+
+For evaluation of a number $\alpha$, we can then perform the parallel process in the multimodular process, which is simple:
+\begin{enumerate}
+  \item 
+    Reduce $\alpha$ to its basic state modulo $r$, the size of the ring.
+  \item
+    Find each reduction $\alpha_i$ of $\alpha \mod p_i$ for every prime calculated.
+  \item
+    Lookup the evalution $f(\alpha_i)\mod p_i$ in the table.
+  \item
+    Using the Chinese Remainder Theorem, reconstruct the evaluation modulo $p_1p_2\cdots p_n$, and return this modulo $r$.
+\end{enumerate}
+
+In general, due to the comparatively long time spent researching the prerequisite theory, the implementation is itself relatively simple and generally follows the codepaths and parameters that were easiest to design.
+Alternative choices and the limitations of the current system are discussed in evaluation and potential further results, which bring up a variety of interesting directions for this project as it continues to develop.
 
 \section{Evaluation}
-\begin{itemize}
-\item Experiment design...
-\item Data...
-\item Metrics...
-\item Comparisons...
-\item Qualitative results...
-\item Quantitative results...
-\item Further results needed...
-\end{itemize}
+\subsection{Experiment design}
+A preface to the following results may be somewhat helpful, as the data is largely encapsulated within a few views that each provide a small insight rather than being a directly and easily interpretable table.
+The focus was on seeing what kinds of values for $d$ (the degree of the polynomial) and $r$ (the size of the ring) would have the most optimal gains in the performance of the query structure.
+In general, because the scaling depends on both factors, it is extremely cost prohibitive to iterate tests over larger inputs, just due to the structure used by SageMath and the generally slower performance of Python.
+
+In particular, two major tests were run.
+The first, performed with an earlier version of the code, had a more aggressive stop to the prime-generation algorithm, and was an attempt at making it more efficient.
+The second, was largely to do with parameter optimization and checking different inputs to how best to apply this algorithm to realize the largest performance improvements.
+
+\subsection{Results}
+Due to the aggressiveness of the first algorithm with regards to the prime cutoff, the correctness began to suffer---that is, the algorithm did not return correct results for every input value possible, but the results are still interesting as a window into the kind of performance that would be exhibited for larger inputs.
+The results of the first experiment are below:
+
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{|l|l|l|}
+    \hline
+    Degree & SageMath & Code  \\ \hline
+    1250   & 0.229    & 0.383 \\ \hline
+    2500   & 0.412    & 0.368 \\ \hline
+    5000   & 0.845    & 0.370 \\ \hline
+  \end{tabular}
+  \caption{First experiment}
+\end{table}
+
+This was performed on a ring size $r=6997$ (a reasonably large prime was chosen, so the ring would actually be field and thus exhibit nicer behavior), with 10000 trials performed over random points generated on the ring.
+Random polynomials of various degrees were generated for these purposes; the time costs of doing this within SageMath's framework (which required continuous concatenation) were actually relatively expensive and prevented repeated tests over different polynomials from being run quickly.
+Times are listed in seconds; the key note here is that because of the precomputed behavior, the implementation has a relatively constant time as the input gets larger.
+This comes at the cost of relatively large precomputation time, as SageMath does not appear to support the finite field FFT in the correct form.
+Thus, the algorithm had to manually precompute each of the reduced polynomials by standard evaluation.
+This combined with what appears to be slow Python memory allocation meant that an experiment such as the one above took on the order of a few minutes to initialize and precompute; this cost was a significant barrier in evaluation and testing.
+
+The second test was focused on determining values such that the full algorithm could be run efficiently, as the algorithm takes time linear to the number of primes generated.
+In our case, this is equivalent to roughly $16\log(d^m(r-1)^{dm})$.
+This, while being the theoretical value, was only approximately followed as the prime-generating modification based on the product of primes was able to use a faster but still completely correct cutoff.
+In practice, this seemed to generally give an extra 10\% of performance, though this number fluctuated.
+In general, because the basic unipoint univariate algorithm takes time linear to the degree $d$, we can write its efficiency as $cd$, where $c$ is a constant that is assumed to be low.
+As we want our algorithm (taking time proportional to $16\log(d^m(r-1)^{dm})$) to be faster, this is equivalent to solving the inequality
+\[16\log(d^m(r-1)^{dm}) < cd\]
+As we deal with the univariate case, we can let $m=1$ which simplifies it somewhat.
+We must however consider what potential values for $c$ look like.
+For the naive algorithm, we do modular multiplication and addition, which is generally very efficient.
+On the other hand, for the fast algorithm, the operation is just a lot of Chinese Remainder Theorem applications, which are likely more expensive.
+Thus, $c$ is likely to be less than $1$ (as it represents the ratio of naive algorithm operation efficiency to our implementation's operation efficiency).
+In general, because of the large constant of $16$, this scales very quickly and thus means that solutions don't appear for extremely large numbers.
+
+In fact, if we let $c=1$ (likely an optimistic assumption), solutions for any value of $r$ greater than 2 are simply too large to be reasonably run.
+However, we do get interesting albeit limited results on $r=2$ where we vary the degree:
+
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{|l|l|l|}
+    \hline
+    Degree & SageMath & Code  \\ \hline
+    1000   & 0.159    & 0.041 \\ \hline
+    10000  & 1.45     & 0.045 \\ \hline
+    100000 & 94.86    & 0.055 \\ \hline
+  \end{tabular}
+  \caption{Second experiment}
+\end{table}
+
+Once again, we get behavior that scales extremely well for larger degrees.
+This experiment was run in a similar way as the previous, but with 1000 random trials.
+It comes with its own set of limitations, however, as this technically required generating all primes up to 212.
+Using the optimization in this case brought this number well down to just primes up to 13, but the limitation comes in the fact that the polynomial has to be preevaluated at each of these primes.
+Given that $r=2$, this is the first prime and thus the polynomial was already preevaluated at all possible input values.
+Thus, in this case, the algorithm is performing significant amounts of superfluous computation.
+However, it does showcase the expected performance behavior of the algorithm for larger inputs, and thus the implementation does seem to be potentially very efficient.
+This is particularly shown by the growth behavior, for which the implementation shows outstanding results; this is of core importance to the algorithm, as it demonstrates the improvements in big-Oh performance that we sought to gain.
+
+Also of note is that the space efficiency of this method is generally great; as in the case of the $d=1000$, as it only requires the primes up to 13, these can all be stored with space proportional to 41 (the sum of the primes up to 13).
+This means that a huge polynomial can have an extremely compact associated evaluation structure, which is excellent.
+In fact, it is possible to see this as a compression for the polynomial should the evaluations be the only item of interest.
+This would of course require further tweaking to ensure that the compressed polynomial would take less space than a simple complete lookup table, but given the small growth of the space (equivalent to the time taken, as they are linearly proportional), it serves as a good indicator.
+
+\subsection{Difficulties and further results}
+A substantative problem in this testing was largely to do with SageMath limitations; as noted before, a lack of the correct FFT and the slow methods of polynomial initialization were prohibitive in trying to rapidly test larger inputs.
+This also meant that the precomputation time was not able to be tested against the theoretical big-Oh performance, as it used a slightly different codepath as the algorithm described in the paper.
+Ultimately, not very many SageMath functions were actually used for the code itself; apart from the general framework, the only real note were a few reductions and the Chinese Remainder Theorem.
+While SageMath was an excellent platform for testing and prototyping, it served in a far weaker capacity when attempting to benchmark actual results.
+
+Furthermore, because of the large constants involved in the prime number limit needed by the algorithm, tweaking the code to find reasonable parameters was extremely difficult.
+This meant that ultimately, the multivariate case was dropped entirely, though it is a natural extension of the current algorithm (and indeed is in the basis of the original multimodular reduction).
+It is likely that more substantive gains would have been found in the multivariate case, but due to the large initialization overhead, it was impossible to test enough combinations to figure out some more foundation on what would have been good parameters to operate on.
 
 \section{Summary}
-\begin{itemize}
-\item Conclusions...
-\item Limitations...
-\item Future work...
-\end{itemize}
 
+\subsection{Limitations and future work}
+An important part of this project is the current limitations in the system and how they could be extended, as many design choices were forced due to time constraints.
+Many of these are already being addressed in partial developmental work; however, results using these are still farther off due to the necessity of a whole system to produce actual results.
+The apparent key limitation is the reliance on the univariate case, which is implemented rather efficiently by current algorithms.
+The core of the algorithm was designed to be multivariate, but for testing purposes the univariate case was chosen for simplicity.
+Indeed, the likely optimal way of using the multimodular algorithm is with a reasonably large number of variables, and the paper defines a mapping $\phi$ for a univariate function to be injectively linked to an equivalent multivariate function for which evaluation is nearly equivalent.
+This would allow the cost to be in a sense more distributed between the degree $d$ and the number of variables $m$, which would help keep the number of primes necessary in check.
+In a similar vein, the repeated reductions that multimodular uses (based on the constant $t$) were scrapped as the initial benchmarks showed it was not needed; it is likely that to test for larger inputs, this constant will become more and more important to optimize, and in fact it seems that $t$ would become a function of $d$ and $m$.
+
+%prime generation
+There are also many small tweaks that could improve overall performance.
+Even small things like prime generation could likely be performed using a more efficient method such as the Sieve of Erastothenes, or simply cached for other polynomials.
+In addition, the structure of the polynomial was not entirely conducive to the current needs of the system, as SageMath does not allow for coefficient arrays to initialize polynomials.
+It is entirely possible that the code could be written from the ground up in a more performant language without relying on the framework of SageMath, which would be a significant benefit when considering how evaluation is likely to work in the first place.
+Since SageMath relies mostly on external C libraries to do its polynomial functions, it is likely that evaluation is based on that, while our current implementation is entirely written in Python.
+For something like this where real-world gains are possible and indeed a general goal, reducing the constant costs of operations using a lower-level language than Python could have significant benefits.
+It is also potentially noteworthy that the reconstruction can also happen in parallel as discussed in the earlier sections about Chinese Remainder Theorem modular arithmetic evaluations, further increasing the breadth of potentially available optimizations.
+\subsection{Conclusions}
+The current structure provides a glimpse at how the system could perform with substantially larger inputs, as well as a sense of comparative behavior.
+We also see that is is unlikely to get good performance gains for smaller inputs, meaning that the niche of this method is narrowed.
+However, it would be possible to take this forward, and with early results already being reasonably promising, it seems likely that future work will also be fruitful.
+There are a significant number of algorithms discussed in this paper, and performance gains in a few of them would have significant cascading effects.
+In general, there are likely significant places for optimization in the implementation, and current results seem to indicate that further improvement should be possible.
+The current groundwork laid out shows much of the conceptual base for the algorithm, but tuning the actual system itself would almost certainly lead to even stronger results.
 
 \bstctlcite{bstctl:etal, bstctl:nodash, bstctl:simpurl}
 \bibliographystyle{IEEEtranS}
 \bibliography{references}
+\nocite{*}
 \end{document}
-
